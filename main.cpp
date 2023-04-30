@@ -14,6 +14,9 @@ std::vector<complex> dft(const std::vector<complex> &x) {
     return X;
 }
 
+// main function
+
+
 int main() {
     // create a vector of 440hz sine wave samples, sampled at 44100hz
     std::vector<complex> x(6000);
