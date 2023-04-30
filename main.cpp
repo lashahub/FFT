@@ -1,5 +1,6 @@
 #include <iostream>
 #include <complex>
+#include <cmath>
 #include <vector>
 
 using complex = std::complex<double>;
@@ -28,6 +29,8 @@ std::vector<complex> WavesToSamples(const std::vector<Wave> &waves, int sample_r
     return samples;
 }
 
+
+// DFT function
 std::vector<complex> dft(const std::vector<complex> &x) {
     std::vector<complex> X(x.size());
     for (int k = 0; k < x.size(); ++k) {
@@ -38,7 +41,41 @@ std::vector<complex> dft(const std::vector<complex> &x) {
     return X;
 }
 
-// main function
+
+
+// FFT function radix2-cooley-tukey
+std::vector<complex> fft(const std::vector<complex> &x) {
+    std::vector<complex> X(x.size());
+    int N = x.size();
+
+    if (x.size() == 1) {
+        X[0] = x[0];
+        return X;
+    }
+    std::vector<complex> x_even(x.size() / 2);
+    std::vector<complex> x_odd(x.size() / 2);
+    for (int i = 0; i < x.size() / 2; ++i) {
+        x_even[i] = x[2 * i];
+        x_odd[i] = x[2 * i + 1];
+    }
+    std::vector<complex> X_even = fft(x_even);
+    std::vector<complex> X_odd = fft(x_odd);
+
+    complex w = std::exp(complex(0, 0));
+    complex w_n = std::exp(complex(0, -2 * M_PI / N));
+    for (int k = 0; k < x.size() / 2; ++k) {
+        X[k] = X_even[k] + w * X_odd[k];
+        X[k + x.size() / 2] = X_even[k] - w * X_odd[k];
+        w = w * w_n;
+    }
+    return X;
+}
+
+
+//FFT General version for composite N = pq
+std::vector<complex> fft_general(const std::vector<complex> &x, int N, int p, int q) {
+    std::vector<complex> X(x.size());
+}
 
 
 int main() {
@@ -49,11 +86,13 @@ int main() {
             {1320, 0.25, 0}
     };
 
-
-
-    std::vector<complex> X = dft(WavesToSamples(waves, 44100, 0.1));
+    std::vector<complex> X = dft(WavesToSamples(waves, 4410, 0.2322));
+    std::vector<complex> X2 = fft(WavesToSamples(waves, 4410, 0.2322));
+    std::cout << X.size() << std::endl;
     for (size_t i = 0; i < 500; ++i) {
-        std::cout << i << " " << std::norm(X[i]) << std::endl;
+        std::cout << i << " " << std::norm(X2[i] - X[i]) << std::endl;
     }
+    std:: cout << X.size() << std::endl;
     return 0;
 }
+
