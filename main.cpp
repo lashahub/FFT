@@ -1,90 +1,128 @@
-#include <iostream>
-#include <complex>
 #include <vector>
-#include <random>
-
-#define NUM_SAMPLES 4096
-
-static std::random_device rd;
-using rand_eng = std::mt19937_64;
-static rand_eng eng(rd());
-static std::uniform_real_distribution<> uniform_real(0.0, 1.0);
-static std::uniform_int_distribution<> uniform_int(0);
+#include <complex>
+#include <cmath>
+#include <iostream>
+#include <thread>
 
 using complex = std::complex<double>;
 
-class Wave {
-public:
-    double frequency;
-    double amplitude;
-    double phase;
+std::vector<int> factorize(int n) {
+    std::vector<int> factors;
+    while (n % 2 == 0) {
+        factors.push_back(2);
+        n = n / 2;
+    }
 
-public:
-    Wave(double frequency, double amplitude, double phase)
-            : frequency(frequency), amplitude(amplitude),
-              phase(phase) {}
-
-};
-
-std::vector<complex> waves_to_samples(const std::vector<Wave> &waves, int n_samples) {
-    std::vector<complex> samples(n_samples);
-    for (size_t i = 0; i < samples.size(); ++i) {
-        for (const auto &wave: waves) {
-            samples[i] += wave.amplitude * std::sin(2 * M_PI * wave.frequency * (double) i / (double) n_samples +
-                                                    wave.phase);
+    for (int i = 3; i <= sqrt(n); i += 2) {
+        while (n % i == 0) {
+            factors.push_back(i);
+            n = n / i;
         }
     }
-    return samples;
+
+    if (n > 2)
+        factors.push_back(n);
+
+    return factors;
 }
 
-bool test(std::vector<complex> (*func)(const std::vector<complex> &)) {
-    int n_waves = 10;
+std::vector<std::vector<complex>> decompose(const std::vector<complex> &x) {
+    std::vector<std::vector<complex>> sub_sequences;
 
-    std::vector<Wave> waves;
-    waves.reserve(n_waves);
+    int N = x.size();
+    auto factors = factorize(N);
 
-    for (int i = 0; i < n_waves; ++i) {
-        waves.emplace_back(uniform_int(eng) % (NUM_SAMPLES / 2),
-                           uniform_real(eng),
-                           uniform_real(eng));
-    }
-
-    std::vector<complex> samples = waves_to_samples(waves, NUM_SAMPLES);
-    std::vector<complex> X = func(samples);
-
-    for (int i = 0; i < n_waves; ++i) {
-        if (std::abs(waves[i].amplitude - std::abs(X[i])) > 0.0001) {
-            return false;
-        }
-        if (std::abs(waves[i].frequency - i) > 0.0001) {
-            return false;
-        }
-        if (std::abs(waves[i].phase - std::arg(X[i])) > 0.0001) {
-            return false;
+    for (auto factor: factors) {
+        int num_sub_sequences = N / factor;
+        for (int i = 0; i < num_sub_sequences; ++i) {
+            std::vector<complex> sub_sequence(factor);
+            for (int j = 0; j < factor; ++j) {
+                sub_sequence[j] = x[i * factor + j];
+            }
+            sub_sequences.push_back(sub_sequence);
         }
     }
 
-    return true;
+    return sub_sequences;
 }
 
-std::vector<complex> dft(const std::vector<complex> &x) {
-    std::vector<complex> X(x.size());
-    for (int k = 0; k < x.size(); ++k) {
-        for (int n = 0; n < x.size(); ++n) {
-            X[k] += x[n] * std::exp(complex(0, -2 * M_PI * k * n / (double) x.size()));
+void fft(std::vector<complex> &x) {
+    int N = x.size();
+    if (N <= 1) return;
+
+    std::vector<complex> even(N / 2), odd(N / 2);
+    for (int i = 0; i < N / 2; ++i) {
+        even[i] = x[i * 2];
+        odd[i] = x[i * 2 + 1];
+    }
+
+    fft(even);
+    fft(odd);
+
+    for (int k = 0; k < N / 2; ++k) {
+        complex t = std::polar(1.0, -2 * M_PI * k / N) * odd[k];
+        x[k] = even[k] + t;
+        x[k + N / 2] = even[k] - t;
+    }
+}
+
+std::vector<std::complex<double>> mixed_radix_fft(const std::vector<double> &input) {
+    int N = input.size();
+
+    std::vector<std::complex<double>> complex_input(input.begin(), input.end());
+
+    auto sub_sequences = decompose(complex_input);
+
+    int num_cores = std::thread::hardware_concurrency();
+    int num_threads = std::min(num_cores, static_cast<int>(sub_sequences.size()));
+    std::vector<std::thread> threads(num_threads);
+
+    int tasks_per_thread = sub_sequences.size() / num_threads;
+    int extra_tasks = sub_sequences.size() % num_threads;
+
+    auto work = [&sub_sequences](int start, int end) {
+        // print start and end
+        printf("start: %d, end: %d\n", start, end);
+        for (int i = start; i < end; ++i) {
+            fft(sub_sequences[i]);
+        }
+    };
+
+    int start = 0;
+    for (int i = 0; i < num_threads; ++i) {
+        int end = start + tasks_per_thread;
+        if (i < extra_tasks) ++end;
+        threads[i] = std::thread(work, start, end);
+        start = end;
+    }
+
+    for (auto &thread: threads) {
+        thread.join();
+    }
+
+    // Twiddle factors multiplication and results combining
+    std::vector<std::complex<double>> output(N);
+    for (int k = 0; k < N; ++k) {
+        for (size_t i = 0; i < sub_sequences.size(); ++i) {
+            int m = N / sub_sequences[i].size();
+            output[k] += std::polar(1.0, -2 * M_PI * k * m / N) * sub_sequences[i][k % m];
         }
     }
-    return X;
+
+    return output;
 }
 
 int main() {
-
-    std::cout << "Testing DFT..." << std::endl;
-    if (test(dft)) {
-        std::cout << "DFT test passed!" << std::endl;
-    } else {
-        std::cout << "DFT test failed!" << std::endl;
+    std::vector<double> input;
+    for (int i = 0; i < 500; ++i) {
+        input.push_back(i);
     }
+    auto output = mixed_radix_fft(input);
+
+    // Print out the resulting FFT coefficients
+//    for (const auto &coef: output) {
+//        std::cout << coef << '\n';
+//    }
 
     return 0;
 }
