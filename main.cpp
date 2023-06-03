@@ -3,126 +3,99 @@
 #include <cmath>
 #include <iostream>
 #include <thread>
+#include <algorithm>
+#include <random>
 
+const int MAX_THREAD_DEPTH = 4;
 using complex = std::complex<double>;
 
-std::vector<int> factorize(int n) {
-    std::vector<int> factors;
-    while (n % 2 == 0) {
-        factors.push_back(2);
-        n = n / 2;
-    }
+std::random_device rd;
+std::uniform_int_distribution<> uniform(0, std::numeric_limits<int>::max());
+std::mt19937_64 engine(rd());
 
-    for (int i = 3; i <= sqrt(n); i += 2) {
-        while (n % i == 0) {
-            factors.push_back(i);
-            n = n / i;
+void fft(std::vector<complex> &a, size_t n, int depth = 0) {
+    size_t length = a.size();
+    if (length == 1)
+        return;
+
+    std::vector<complex> a0((length + 1) / 2), a1(length / 2);
+    for (int i = 0; 2 * i < length; i++) {
+        a0[i] = a[2 * i];
+        if (2 * i + 1 < length) {
+            a1[i] = a[2 * i + 1];
         }
     }
 
-    if (n > 2)
-        factors.push_back(n);
+    if (depth < MAX_THREAD_DEPTH && false) {
+        std::thread t1(fft, std::ref(a0), n / 2, depth + 1);
+        std::thread t2(fft, std::ref(a1), n / 2, depth + 1);
+        t1.join();
+        t2.join();
+    } else {
+        fft(a0, depth + 1);
+        fft(a1, depth + 1);
+    }
 
-    return factors;
-}
+    double ang = -2 * M_PI / (double) (n);
+    complex w(1), w_n(std::exp(complex(0, ang)));
 
-std::vector<std::vector<complex>> decompose(const std::vector<complex> &x) {
-    std::vector<std::vector<complex>> sub_sequences;
-
-    int N = x.size();
-    auto factors = factorize(N);
-
-    for (auto factor: factors) {
-        int num_sub_sequences = N / factor;
-        for (int i = 0; i < num_sub_sequences; ++i) {
-            std::vector<complex> sub_sequence(factor);
-            for (int j = 0; j < factor; ++j) {
-                sub_sequence[j] = x[i * factor + j];
-            }
-            sub_sequences.push_back(sub_sequence);
+    for (int i = 0; i < length / 2; i++) {
+        a[i] = a0[i] + w * a1[i];
+        if (i + length / 2 < length) {
+            a[i + length / 2] = a0[i] - w * a1[i];
         }
-    }
-
-    return sub_sequences;
-}
-
-void fft(std::vector<complex> &x) {
-    int N = x.size();
-    if (N <= 1) return;
-
-    std::vector<complex> even(N / 2), odd(N / 2);
-    for (int i = 0; i < N / 2; ++i) {
-        even[i] = x[i * 2];
-        odd[i] = x[i * 2 + 1];
-    }
-
-    fft(even);
-    fft(odd);
-
-    for (int k = 0; k < N / 2; ++k) {
-        complex t = std::polar(1.0, -2 * M_PI * k / N) * odd[k];
-        x[k] = even[k] + t;
-        x[k + N / 2] = even[k] - t;
+        w = w * w_n;
     }
 }
 
-std::vector<std::complex<double>> mixed_radix_fft(const std::vector<double> &input) {
-    int N = input.size();
-
-    std::vector<std::complex<double>> complex_input(input.begin(), input.end());
-
-    auto sub_sequences = decompose(complex_input);
-
-    int num_cores = std::thread::hardware_concurrency();
-    int num_threads = std::min(num_cores, static_cast<int>(sub_sequences.size()));
-    std::vector<std::thread> threads(num_threads);
-
-    int tasks_per_thread = sub_sequences.size() / num_threads;
-    int extra_tasks = sub_sequences.size() % num_threads;
-
-    auto work = [&sub_sequences](int start, int end) {
-        // print start and end
-        printf("start: %d, end: %d\n", start, end);
-        for (int i = start; i < end; ++i) {
-            fft(sub_sequences[i]);
-        }
-    };
-
-    int start = 0;
-    for (int i = 0; i < num_threads; ++i) {
-        int end = start + tasks_per_thread;
-        if (i < extra_tasks) ++end;
-        threads[i] = std::thread(work, start, end);
-        start = end;
-    }
-
-    for (auto &thread: threads) {
-        thread.join();
-    }
-
-    // Twiddle factors multiplication and results combining
-    std::vector<std::complex<double>> output(N);
-    for (int k = 0; k < N; ++k) {
-        for (size_t i = 0; i < sub_sequences.size(); ++i) {
-            int m = N / sub_sequences[i].size();
-            output[k] += std::polar(1.0, -2 * M_PI * k * m / N) * sub_sequences[i][k % m];
+std::vector<complex> dft(const std::vector<complex> &a, size_t n) {
+    size_t length = a.size();
+    std::vector<complex> y(length);
+    for (size_t k = 0; k < length; k++) {
+        for (size_t j = 0; j < length; j++) {
+            double angle = 2 * M_PI * (double) j * (double) k / (double) n;
+            y[k] += a[j] * complex(std::cos(angle), -std::sin(angle));
         }
     }
+    return y;
+}
 
-    return output;
+bool compareResults(const std::vector<complex> &fft_res, const std::vector<complex> &dft_res) {
+    double epsilon = 1e-6;
+    if (fft_res.size() != dft_res.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < fft_res.size(); i++) {
+        if (std::abs(fft_res[i].real() - dft_res[i].real()) > epsilon ||
+            std::abs(fft_res[i].imag() - dft_res[i].imag()) > epsilon) {
+            return false;
+        }
+    }
+    return true;
 }
 
 int main() {
-    std::vector<double> input;
-    for (int i = 0; i < 500; ++i) {
-        input.push_back(i);
-    }
-    auto output = mixed_radix_fft(input);
+    size_t length = 3, n = 4;
 
-    // Print out the resulting FFT coefficients
-//    for (const auto &coef: output) {
-//        std::cout << coef << '\n';
-//    }
+    std::vector<complex> a(length);
+    for (int i = 0; i < length; i++) {
+        a[i] = complex(i, 0);
+//        a[i] = complex(uniform(engine) % 1000, 0);
+    }
+
+    auto b = dft(a, n);
+    fft(a, n);
+
+    // print a and b
+    for (int i = 0; i < length; i++) {
+        std::cout << a[i] << " " << b[i] << std::endl;
+    }
+
+    if (compareResults(a, b)) {
+        std::cout << "FFT and DFT results match" << std::endl;
+    } else {
+        std::cout << "FFT and DFT results do not match" << std::endl;
+    }
 
     return 0;
 }
