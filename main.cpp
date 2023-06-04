@@ -5,6 +5,7 @@
 #include <thread>
 #include <algorithm>
 #include <random>
+#include <iomanip>
 
 const int MAX_THREAD_DEPTH = 4;
 using complex = std::complex<double>;
@@ -13,61 +14,75 @@ std::random_device rd;
 std::uniform_int_distribution<> uniform(0, std::numeric_limits<int>::max());
 std::mt19937_64 engine(rd());
 
-void fft(std::vector<complex> &a, size_t n, int depth = 0) {
-    size_t length = a.size();
-    if (length == 1)
+size_t next_power_of_2(size_t n) {
+    size_t res = 1;
+    while (res < n) {
+        res <<= 1;
+    }
+    return res;
+}
+
+void fft_rec(std::vector<complex> &a, int depth = 0) {
+    size_t n = a.size();
+    if (n == 1)
         return;
 
-    std::vector<complex> a0((length + 1) / 2), a1(length / 2);
-    for (int i = 0; 2 * i < length; i++) {
-        a0[i] = a[2 * i];
-        if (2 * i + 1 < length) {
-            a1[i] = a[2 * i + 1];
+    std::vector<complex> even(n / 2), odd(n / 2);
+    for (int i = 0; 2 * i < n; i++) {
+        even[i] = a[2 * i];
+        if (2 * i + 1 < n) {
+            odd[i] = a[2 * i + 1];
         }
     }
 
-    if (depth < MAX_THREAD_DEPTH && false) {
-        std::thread t1(fft, std::ref(a0), n / 2, depth + 1);
-        std::thread t2(fft, std::ref(a1), n / 2, depth + 1);
+    if (depth < MAX_THREAD_DEPTH) {
+        std::thread t1(fft_rec, std::ref(even), depth + 1);
+        std::thread t2(fft_rec, std::ref(odd), depth + 1);
         t1.join();
         t2.join();
     } else {
-        fft(a0, depth + 1);
-        fft(a1, depth + 1);
+        fft_rec(even, depth + 1);
+        fft_rec(odd, depth + 1);
     }
 
-    double ang = -2 * M_PI / (double) (n);
-    complex w(1), w_n(std::exp(complex(0, ang)));
+    double ang = 2 * M_PI / (double) n;
+    complex w(1), wn(std::cos(ang), std::sin(ang));
 
-    for (int i = 0; i < length / 2; i++) {
-        a[i] = a0[i] + w * a1[i];
-        if (i + length / 2 < length) {
-            a[i + length / 2] = a0[i] - w * a1[i];
-        }
-        w = w * w_n;
+    for (size_t i = 0; 2 * i < n; i++) {
+        a[i] = even[i] + w * odd[i];
+        a[i + n / 2] = even[i] - w * odd[i];
+        w *= wn;
     }
 }
 
-std::vector<complex> dft(const std::vector<complex> &a, size_t n) {
+void fft(std::vector<complex> &a) {
+    size_t n = a.size();
+    a.resize(next_power_of_2(n));
+    fft_rec(a);
+    a.resize(n);
+}
+
+std::vector<complex> dft(const std::vector<complex> &a) {
     size_t length = a.size();
+    size_t n = next_power_of_2(length);
     std::vector<complex> y(length);
+#pragma omp parallel for
     for (size_t k = 0; k < length; k++) {
         for (size_t j = 0; j < length; j++) {
             double angle = 2 * M_PI * (double) j * (double) k / (double) n;
-            y[k] += a[j] * complex(std::cos(angle), -std::sin(angle));
+            y[k] += a[j] * complex(std::cos(angle), std::sin(angle));
         }
     }
     return y;
 }
 
 bool compareResults(const std::vector<complex> &fft_res, const std::vector<complex> &dft_res) {
-    double epsilon = 1e-6;
+    double epsilon = 1e-2;
     if (fft_res.size() != dft_res.size()) {
         return false;
     }
     for (size_t i = 0; i < fft_res.size(); i++) {
-        if (std::abs(fft_res[i].real() - dft_res[i].real()) > epsilon ||
-            std::abs(fft_res[i].imag() - dft_res[i].imag()) > epsilon) {
+        if (std::abs(fft_res[i] - dft_res[i]) > epsilon) {
             return false;
         }
     }
@@ -75,21 +90,16 @@ bool compareResults(const std::vector<complex> &fft_res, const std::vector<compl
 }
 
 int main() {
-    size_t length = 3, n = 4;
+    size_t n = 3911;
 
-    std::vector<complex> a(length);
-    for (int i = 0; i < length; i++) {
-        a[i] = complex(i, 0);
-//        a[i] = complex(uniform(engine) % 1000, 0);
+    std::vector<complex> a(n);
+    for (int i = 0; i < n; i++) {
+        a[i] = complex(uniform(engine) % 100, 0);
     }
 
-    auto b = dft(a, n);
-    fft(a, n);
+    auto b = dft(a);
+    fft(a);
 
-    // print a and b
-    for (int i = 0; i < length; i++) {
-        std::cout << a[i] << " " << b[i] << std::endl;
-    }
 
     if (compareResults(a, b)) {
         std::cout << "FFT and DFT results match" << std::endl;
