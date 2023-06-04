@@ -28,10 +28,21 @@ void fft_rec(std::vector<complex> &a, int depth = 0) {
         return;
 
     std::vector<complex> even(n / 2), odd(n / 2);
-    for (int i = 0; 2 * i < n; i++) {
-        even[i] = a[2 * i];
-        if (2 * i + 1 < n) {
-            odd[i] = a[2 * i + 1];
+
+    if (depth < MAX_THREAD_DEPTH) {
+#pragma omp parallel for
+        for (int i = 0; i < n / 2; i++) {
+            even[i] = a[2 * i];
+            if (2 * i + 1 < n) {
+                odd[i] = a[2 * i + 1];
+            }
+        }
+    } else {
+        for (int i = 0; 2 * i < n; i++) {
+            even[i] = a[2 * i];
+            if (2 * i + 1 < n) {
+                odd[i] = a[2 * i + 1];
+            }
         }
     }
 
@@ -46,12 +57,21 @@ void fft_rec(std::vector<complex> &a, int depth = 0) {
     }
 
     double ang = 2 * M_PI / (double) n;
-    complex w(1), wn(std::cos(ang), std::sin(ang));
 
-    for (size_t i = 0; 2 * i < n; i++) {
-        a[i] = even[i] + w * odd[i];
-        a[i + n / 2] = even[i] - w * odd[i];
-        w *= wn;
+
+    if (depth < MAX_THREAD_DEPTH) {
+#pragma omp parallel for
+        for (size_t i = 0; i < n / 2; i++) {
+            complex t(std::cos((double) i * ang), (std::sin((double) i * ang)));
+            a[i] = even[i] + t * odd[i];
+            a[i + n / 2] = even[i] - t * odd[i];
+        }
+    } else {
+        for (size_t i = 0; 2 * i < n; i++) {
+            complex t(std::cos((double) i * ang), (std::sin((double) i * ang)));
+            a[i] = even[i] + t * odd[i];
+            a[i + n / 2] = even[i] - t * odd[i];
+        }
     }
 }
 
