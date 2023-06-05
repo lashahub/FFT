@@ -5,7 +5,16 @@
 #include <thread>
 #include <algorithm>
 #include <random>
-#include "bmp.hpp"
+
+#define STB_IMAGE_IMPLEMENTATION
+
+#include "stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+
+#include "stb_image_write.h"
+
+#include "utils.hpp"
 
 const int MAX_THREAD_DEPTH = 4;
 using complex = std::complex<double>;
@@ -110,22 +119,28 @@ bool compareResults(const std::vector<complex> &fft_res, const std::vector<compl
 }
 
 int main() {
-    size_t n = 3911;
+    int width, height, channels;
 
-    std::vector<complex> a(n);
-    for (int i = 0; i < n; i++) {
-        a[i] = complex(uniform(engine) % 100, 0);
+    uint8_t *img = stbi_load("input.png", &width, &height, &channels, 0);
+
+    if (img == nullptr) {
+        printf("Error in loading the image\n");
+        return -1;
     }
 
-    auto b = dft(a);
-    fft(a);
-
-
-    if (compareResults(a, b)) {
-        std::cout << "FFT and DFT results match" << std::endl;
-    } else {
-        std::cout << "FFT and DFT results do not match" << std::endl;
+    uint8_t *gray_img = new uint8_t[width * height];
+    for (int i = 0; i < width * height * channels; i += channels) {
+        uint8_t gray_value = 0.299 * img[i] + 0.587 * img[i + 1] + 0.114 * img[i + 2];
+        gray_img[i / channels] = gray_value;
     }
+
+    stbi_image_free(img);
+
+    std::vector<uint8_t> edge_detected_image = apply_sobel(gray_img, width, height);
+
+    stbi_write_png("edge_detected_image.png", width, height, 1, edge_detected_image.data(), width);
+
+    delete[] gray_img;
 
     return 0;
 }
