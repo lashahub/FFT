@@ -5,7 +5,7 @@
 #include <thread>
 #include <algorithm>
 #include <random>
-#include <iomanip>
+#include "bmp.hpp"
 
 const int MAX_THREAD_DEPTH = 4;
 using complex = std::complex<double>;
