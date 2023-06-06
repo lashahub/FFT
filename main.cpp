@@ -1,11 +1,28 @@
-#include <iostream>
+
+#include <vector>
 #include <complex>
 #include <cmath>
-#include <vector>
+#include <iostream>
 #include <thread>
+#include <algorithm>
+#include <random>
 
+#define STB_IMAGE_IMPLEMENTATION
 
+#include "stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+
+#include "stb_image_write.h"
+
+//#include "utils.hpp"
+
+const size_t MAX_THREAD_DEPTH = 4;
 using complex = std::complex<double>;
+
+std::random_device rd;
+std::uniform_int_distribution<> uniform(0, std::numeric_limits<int>::max());
+std::mt19937_64 engine(rd());
 
 // helper function to join threads given thread vector
 void join_threads(std::vector<std::thread> &threads) {
@@ -302,6 +319,7 @@ int main() {
     for (int i = 0; i < Y.size(); i++) {
         std::cout << Y[i] << std::endl;
     }
+
     return 0;
 }
 
