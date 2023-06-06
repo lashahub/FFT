@@ -3,9 +3,9 @@ project(FFT)
 
 set(CMAKE_CXX_STANDARD 17)
 
+find_package(OpenCV REQUIRED)
+find_package(OpenMP REQUIRED)
+
 add_executable(FFT main.cpp utils.cpp utils.hpp)
 
-find_package(OpenMP REQUIRED)
-if (OpenMP_CXX_FOUND)
-    target_link_libraries(FFT PUBLIC OpenMP::OpenMP_CXX)
-endif ()
+target_link_libraries(FFT PUBLIC ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
