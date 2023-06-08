@@ -24,7 +24,7 @@ int main() {
 
     Point start = findStartingPoint(img, width, height, channels);
     std::vector<Point> contour = traceContour(img, width, height, channels, start);
-    std::vector<Point> transformedContour = transformContour(contour);
+    std::vector<Point> transformedContour = transformContour(contour, 1000);
 
     auto *output_img = new uint8_t[width * height * channels];
     memset(output_img, 255, width * height * channels);

@@ -161,26 +161,173 @@ std::vector<Point> traceContour(const uint8_t *image, int width, int height, int
 }
 
 
-std::vector<Point> transformContour(const std::vector<Point> &contour) {
+std::vector<Point> transformContour(const std::vector<Point> &contour, int numFrequencies) {
+    // Convert the contour to a list of complex numbers
     std::vector<complex> contour_x(contour.size());
     std::vector<complex> contour_y(contour.size());
 
-    for (size_t i = 0; i < contour.size(); i++) {
+    for (int i = 0; i < contour.size(); i++) {
         contour_x[i] = complex(contour[i].x, 0);
         contour_y[i] = complex(contour[i].y, 0);
     }
 
+    // Perform FFT on contour
     fft(contour_x);
     fft(contour_y);
 
+    printDesmosEquations(contour_x, contour_y, 5);
+
+    // Truncate the transformed contour to the desired number of frequencies
+    if (contour_x.size() > numFrequencies) {
+        std::fill(contour_x.begin() + numFrequencies, contour_x.end(), 0);
+        std::fill(contour_y.begin() + numFrequencies, contour_y.end(), 0);
+    }
+
+    // Perform iFFT on the transformed contour
     ifft(contour_x);
     ifft(contour_y);
 
+    // Convert back to a list of points
     std::vector<Point> contour_transformed(contour.size());
-    for (size_t i = 0; i < contour.size(); i++) {
+    for (int i = 0; i < contour.size(); i++) {
         contour_transformed[i].x = (int) contour_x[i].real();
         contour_transformed[i].y = (int) contour_y[i].real();
     }
 
     return contour_transformed;
+}
+
+void
+printDesmosEquations(const std::vector<complex> &contour_x, const std::vector<complex> &contour_y, int numFrequencies) {
+    std::ofstream desmosFile;
+    desmosFile.open("desmos.txt");
+    desmosFile << "x(t) = ";
+    for (int n = 0; n < numFrequencies; n++) {
+        if (n != 0)
+            desmosFile << " + ";
+        desmosFile << std::fixed << std::setprecision(3) << contour_x[n].real()
+                   << "*cos(2π*" << n << "*t/" << contour_x.size() << ")"
+                   << " - " << contour_x[n].imag() << "*sin(2π*" << n << "*t/" << contour_x.size() << ")";
+    }
+
+    desmosFile << "\ny(t) = ";
+    for (int n = 0; n < numFrequencies; n++) {
+        if (n != 0)
+            desmosFile << " + ";
+        desmosFile << std::fixed << std::setprecision(3) << contour_y[n].real()
+                   << "*sin(2π*" << n << "*t/" << contour_y.size() << ")"
+                   << " + " << contour_y[n].imag() << "*cos(2π*" << n << "*t/" << contour_y.size() << ")";
+    }
+    desmosFile.close();
+}
+
+
+/*
+ * Polynomial multiplication
+ */
+
+
+int64_t power(int64_t a, int64_t b, int64_t p) {
+    int64_t x = 1, y = a;
+    while (b > 0) {
+        if (b % 2 == 1) {
+            x = (x * y) % p;
+        }
+        y = (y * y) % p;
+        b /= 2;
+    }
+    return x % p;
+}
+
+
+void fft(std::vector<int64_t> &a, bool invert) {
+    int n = a.size();
+    for (int i = 1, j = 0; i < n; ++i) {
+        int bit = n >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) std::swap(a[i], a[j]);
+    }
+    for (int len = 2; len <= n; len <<= 1) {
+        int64_t wlen = invert ? power(root, mod - 1 - (mod - 1) / len, mod) : power(root, (mod - 1) / len, mod);
+        for (int i = 0; i < n; i += len) {
+            int64_t w = 1;
+            for (int j = 0; j < len / 2; ++j) {
+                int64_t u = a[i + j], v = (a[i + j + len / 2] * w) % mod;
+                a[i + j] = u + v < mod ? u + v : u + v - mod;
+                a[i + j + len / 2] = u - v >= 0 ? u - v : u - v + mod;
+                w = (w * wlen) % mod;
+            }
+        }
+    }
+    if (invert) {
+        int64_t nrev = power(n, mod - 2, mod);
+        for (int i = 0; i < n; ++i) a[i] = (a[i] * nrev) % mod;
+    }
+}
+
+
+std::vector<int64_t> multiply(std::vector<int64_t> const &a, std::vector<int64_t> const &b) {
+    std::vector<int64_t> fa(a.begin(), a.end()), fb(b.begin(), b.end());
+    int n = 1;
+    while (n < a.size() + b.size()) n <<= 1;
+    fa.resize(n);
+    fb.resize(n);
+    fft(fa, false);
+    fft(fb, false);
+    for (int i = 0; i < n; i++) fa[i] = (fa[i] * fb[i]) % mod;
+    fft(fa, true);
+    return fa;
+}
+
+/*
+ * Audio processing
+ */
+
+WavData readWavFile(const std::string &filename) {
+    WavHeader header;
+    std::ifstream file(filename, std::ios::binary);
+
+    if (!file) {
+        std::cout << "Error opening file: " << filename << std::endl;
+        exit(1);
+    }
+
+    file.read((char *) &header, sizeof(WavHeader));
+
+    // Check the audio format to ensure it is PCM
+    if (header.audioFormat != 1) {
+        std::cout << "Unsupported audio format: " << header.audioFormat << std::endl;
+        exit(1);
+    }
+
+    // Check the sample size to ensure it is 16 bit
+    if (header.bitsPerSample != 16) {
+        std::cout << "Unsupported bit depth: " << header.bitsPerSample << std::endl;
+        exit(1);
+    }
+
+    // Allocate a vector for the audio data
+    std::vector<uint16_t> audioData(header.subchunk2Size / 2);
+    file.read(reinterpret_cast<char *>(audioData.data()), header.subchunk2Size);
+
+    WavData wavData;
+    wavData.audioFormat = header.audioFormat;
+    wavData.numChannels = header.numChannels;
+    wavData.sampleRate = header.sampleRate;
+    wavData.bitsPerSample = header.bitsPerSample;
+
+    if (header.numChannels == 1) {
+        wavData.leftChannel = std::move(audioData);
+    } else if (header.numChannels == 2) {
+        for (size_t i = 0; i < audioData.size(); i += 2) {
+            wavData.leftChannel.push_back(audioData[i]);
+            wavData.rightChannel.push_back(audioData[i + 1]);
+        }
+    } else {
+        std::cout << "Unsupported number of channels: " << header.numChannels << std::endl;
+        exit(1);
+    }
+
+    return wavData;
 }
