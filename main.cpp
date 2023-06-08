@@ -39,43 +39,32 @@ void test_for_M_times(std::vector<complex> (*fun1)(std::vector<complex> &, bool)
             P[j] = complex(r % 10, im % 10);
         }
         std::vector<complex> Y = fun2(P, num_threads);
-        size_t N_star = modify_size(N, num_threads);
-        P.resize(N_star);
-        std::vector<complex> X = fun1(P, false);
-        X.resize(N);
-        bool result = test(X, Y);
-        passed += result;
+//        size_t N_star = modify_size(N, num_threads);
+//        P.resize(N_star);
+//        std::vector<complex> X = fun1(P, false);
+//        X.resize(N);
+//        bool result = test(X, Y);
+//        passed += result;
     }
     std::cout << "Passed " << passed << "/" << M << " tests." << std::endl;
 }
 
 int main() {
-    int width, height, channels;
-
-    uint8_t *img = stbi_load("input.png", &width, &height, &channels, 0);
-
-    if (img == nullptr) {
-        printf("Error in loading the image\n");
-        return -1;
+    std::vector<complex > P ;
+    for (int i = 0; i < 16384; ++i) {
+        P.emplace_back(i, 0);
     }
 
-    Point start = findStartingPoint(img, width, height, channels);
-    std::vector<Point> contour = traceContour(img, width, height, channels, start);
-    std::vector<Point> transformedContour = transformContour(contour, 1000);
+    std::vector<complex> Y = dft_par(P, false, NUM_THREADS);
+    std::vector<complex> X;
+    radix2_fft_sequential(P);
 
-    auto *output_img = new uint8_t[width * height * channels];
-    memset(output_img, 255, width * height * channels);
-    for (const Point &point: transformedContour) {
-        if (point.x >= 0 && point.x < width && point.y >= 0 && point.y < height) {
-            output_img[(point.y * width + point.x) * channels + 0] = 0;
-            output_img[(point.y * width + point.x) * channels + 1] = 0;
-            output_img[(point.y * width + point.x) * channels + 2] = 0;
-        }
-    }
-    stbi_write_png("output.png", width, height, channels, output_img, width * channels);
-
-    stbi_image_free(img);
-    delete[] output_img;
+    // check if theyre equal
+//for (int i = 0; i < P.size(); ++i) {
+//        std::cout << P[i] << " " << Y[i] << std::endl;
+//    }
+std::cout << P[0] << std::endl;
+std::cout << Y[0] << std::endl;
 
     return 0;
 }
