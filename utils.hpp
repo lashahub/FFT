@@ -15,20 +15,53 @@ extern std::random_device rd;
 extern std::uniform_int_distribution<> uniform;
 extern std::mt19937_64 engine;
 
+//#define STB_IMAGE_IMPLEMENTATION
+//
+//#include "stb_image.h"
+//
+//#define STB_IMAGE_WRITE_IMPLEMENTATION
+//
+//#include "stb_image_write.h"
+
 struct Point {
     int x;
     int y;
 };
 
+
+// Auxilarry functions
+
 size_t next_power_of_2(size_t n);
 
-void fft_rec(std::vector<complex> &a, size_t depth = 0);
+std::vector<complex> adjust_size(std::vector<complex> &P, int new_size);
 
-void fft(std::vector<complex> &a);
+size_t get_prime_factor(size_t N);
 
-void ifft(std::vector<complex> &a);
+size_t modify_size(size_t N, size_t p);
 
-std::vector<complex> dft(const std::vector<complex> &a);
+void join_threads(std::vector<std::thread> &threads);
+
+// FFT functions
+
+void radix2_fft_parallel(std::vector<complex> &coeff, std::vector<complex> &eval, size_t depth = 0);
+
+void radix2_fft_sequential(std::vector<complex> &coeff, std::vector<complex> &eval);
+
+std::vector<complex> fft(std::vector<complex> &coeff);
+
+std::vector<complex> ifft(std::vector<complex> &coeff);
+
+std::vector<complex> dft(std::vector<complex> &a, bool power_of_2 = false);
+
+std::vector<complex> ditfft_sequential(std::vector<complex> &P);
+
+void ditfft2_inplace(std::vector<complex>& P, size_t start, size_t stride, size_t N);
+
+void radix2_fft_parallel(std::vector<complex> &coeff, std::vector<complex> &eval, size_t depth);
+
+std::vector<complex> ditfft_parallel(std::vector<complex> &P, size_t num_threads);
+
+// Image processing functions
 
 Point findStartingPoint(const uint8_t *image, int width, int height, int channels);
 
