@@ -46,7 +46,7 @@ size_t r_int();
 // Main FFT -------------------------------------------------------------------
 
 std::vector<complex>
-fft(MODE mode, std::vector<complex> &coeff, size_t num_threads = std::thread::hardware_concurrency());
+fft(MODE mode, std::vector<complex> &coeff, size_t num_threads = 1);
 
 // DFT ------------------------------------------------------------------------
 
@@ -70,8 +70,6 @@ void fft_dit_par(std::vector<complex> &P, size_t start, size_t stride, size_t N,
 
 // Image processing functions -------------------------------------------------
 
-
-
 struct Point {
     int x;
     int y;
@@ -82,9 +80,6 @@ Point findStartingPoint(const uint8_t *image, int width, int height, int channel
 std::vector<Point> traceContour(const uint8_t *image, int width, int height, int channels, Point start);
 
 std::vector<Point> transformContour(const std::vector<Point> &contour, int numFrequencies);
-
-void
-printDesmosEquations(const std::vector<complex> &contour_x, const std::vector<complex> &contour_y, int numFrequencies);
 
 /*
  * FFT implementation from https://cp-algorithms.com/algebra/fft.html

@@ -97,9 +97,21 @@ std::vector<complex> fft(MODE mode, std::vector<complex> &coeff, size_t num_thre
     return coeff;
 }
 
+void ifft(MODE mode, std::vector<complex> &coeff, size_t num_threads) {
+    size_t n = coeff.size();
+    for (auto &x: coeff) x = std::conj(x);
+
+    fft(mode, coeff, num_threads);
+
+    for (auto &x: coeff) {
+        x = std::conj(x);
+        x /= (double) n;
+    }
+}
 
 
 //********************************* Curves *********************************//
+
 
 Point findStartingPoint(const uint8_t *image, int width, int height, int channels) {
     const int dx[8] = {0, 1, 1, 1, 0, -1, -1, -1};
@@ -165,7 +177,7 @@ std::vector<Point> traceContour(const uint8_t *image, int width, int height, int
 }
 
 
-std::vector<Point> transformContour(const std::vector<Point> &contour) {
+std::vector<Point> transformContour(const std::vector<Point> &contour, int numFrequencies) {
     std::vector<complex> contour_x(contour.size());
     std::vector<complex> contour_y(contour.size());
 
@@ -174,11 +186,22 @@ std::vector<Point> transformContour(const std::vector<Point> &contour) {
         contour_y[i] = complex(contour[i].y, 0);
     }
 
-//    contour_x = fft(contour_x);
-//    contour_y = fft(contour_y);
-//
-//    contour_x = ifft(contour_x);
-//    contour_y = ifft(contour_y);
+    contour_x = fft(MODE::FFT_RADIX2_PAR, contour_x, 8);
+    contour_y = fft(MODE::FFT_RADIX2_PAR, contour_y, 8);
+
+    int cutOffIndex = numFrequencies;
+    for (size_t i = cutOffIndex; i < contour_x.size() / 2; i++) {
+        contour_x[i] = 0;
+        contour_x[contour_x.size() - i] = 0; // for symmetry
+    }
+
+    for (size_t i = cutOffIndex; i < contour_y.size() / 2; i++) {
+        contour_y[i] = 0;
+        contour_y[contour_y.size() - i] = 0; // for symmetry
+    }
+
+    ifft(MODE::FFT_RADIX2_PAR, contour_x, 8);
+    ifft(MODE::FFT_RADIX2_PAR, contour_y, 8);
 
     std::vector<Point> contour_transformed(contour.size());
     for (size_t i = 0; i < contour.size(); i++) {
@@ -187,30 +210,6 @@ std::vector<Point> transformContour(const std::vector<Point> &contour) {
     }
 
     return contour_transformed;
-}
-
-void
-printDesmosEquations(const std::vector<complex> &contour_x, const std::vector<complex> &contour_y, int numFrequencies) {
-    std::ofstream desmosFile;
-    desmosFile.open("desmos.txt");
-    desmosFile << "x(t) = ";
-    for (int n = 0; n < numFrequencies; n++) {
-        if (n != 0)
-            desmosFile << " + ";
-        desmosFile << std::fixed << std::setprecision(3) << contour_x[n].real()
-                   << "*cos(2π*" << n << "*t/" << contour_x.size() << ")"
-                   << " - " << contour_x[n].imag() << "*sin(2π*" << n << "*t/" << contour_x.size() << ")";
-    }
-
-    desmosFile << "\ny(t) = ";
-    for (int n = 0; n < numFrequencies; n++) {
-        if (n != 0)
-            desmosFile << " + ";
-        desmosFile << std::fixed << std::setprecision(3) << contour_y[n].real()
-                   << "*sin(2π*" << n << "*t/" << contour_y.size() << ")"
-                   << " + " << contour_y[n].imag() << "*cos(2π*" << n << "*t/" << contour_y.size() << ")";
-    }
-    desmosFile.close();
 }
 
 

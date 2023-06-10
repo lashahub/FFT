@@ -18,30 +18,32 @@ using complex = std::complex<double>;
 
 int main() {
 
-//    if (test_all_correctness()) {
-//        std::cout << "Correctness test passed" << std::endl;
-//    } else {
-//        std::cout << "Correctness test failed" << std::endl;
-//    }
+    int width, height, channels;
 
-    std::vector<MODE> modes = {MODE::FFT_RADIX2_PAR};
-    std::vector<size_t> num_threads = {16};
-    std::vector<size_t> N = {1000000, 2000000, 3000000, 4000000, 5000000, 6000000, 7000000, 8000000, 10000000, 11000000,
-                             12000000, 13000000, 14000000, 15000000, 16000000, 17000000, 18000000, 19000000, 20000000};
+    uint8_t *img = stbi_load("we_love_cse305.png", &width, &height, &channels, 0);
 
-    auto results = benchmark(modes, num_threads, N);
+    if (img == nullptr) {
+        printf("Error in loading the image\n");
+        return -1;
+    }
 
-    std::cout << "Benchmark results:" << std::endl;
-    for (size_t i = 0; i < results.size(); ++i) {
-        std::cout << "Mode: " << i << std::endl;
-        for (size_t j = 0; j < num_threads.size(); ++j) {
-            std::cout << "Number of threads: " << num_threads[j] << std::endl;
-            for (size_t k = 0; k < N.size(); ++k) {
-                std::cout << N[k] << "," << results[i][j][k] << std::endl;
-            }
-            std::cout << std::endl;
+    Point start = findStartingPoint(img, width, height, channels);
+    std::vector<Point> contour = traceContour(img, width, height, channels, start);
+    std::vector<Point> transformedContour = transformContour(contour, 5000);
+
+    auto *output_img = new uint8_t[width * height * channels];
+    memset(output_img, 255, width * height * channels);
+    for (const Point &point: transformedContour) {
+        if (point.x >= 0 && point.x < width && point.y >= 0 && point.y < height) {
+            output_img[(point.y * width + point.x) * channels + 0] = 0;
+            output_img[(point.y * width + point.x) * channels + 1] = 0;
+            output_img[(point.y * width + point.x) * channels + 2] = 0;
         }
     }
+    stbi_write_png("output.png", width, height, channels, output_img, width * channels);
+
+    stbi_image_free(img);
+    delete[] output_img;
 
     return 0;
 }
