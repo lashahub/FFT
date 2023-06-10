@@ -10,19 +10,24 @@
 #include <fstream>
 #include <iomanip>
 
-const size_t NUM_THREADS = (size_t) std::pow(2, std::ceil(std::log2(std::thread::hardware_concurrency())));
 using complex = std::complex<double>;
 
 extern std::random_device rd;
 extern std::uniform_int_distribution<> uniform;
 extern std::mt19937_64 engine;
 
-struct Point {
-    int x;
-    int y;
+enum class MODE {
+    DFT_SEQ,
+    DFT_PAR,
+    FFT_RADIX2_SEQ,
+    FFT_RADIX2_PAR,
+    FFT_DIT_INPLACE_SEQ,
+    FFT_DIT_INPLACE_PAR,
+    FFT_DIT_SEQ,
+    FFT_DIT_PAR
 };
 
-// Auxiliary functions
+// Auxiliary functions --------------------------------------------------------
 
 size_t next_power_of_2(size_t n);
 
@@ -30,28 +35,47 @@ size_t get_prime_factor(size_t N);
 
 size_t modify_size(size_t N, size_t p);
 
+complex cmplx(double angle);
+
 void join_threads(std::vector<std::thread> &threads);
 
-// FFT functions
-std::vector<complex> dft_seq(std::vector<complex> &a, bool power_of_2 = false);
+size_t new_N(MODE mode, size_t num_threads, size_t N);
 
-std::vector<complex> dft_par(std::vector<complex> &coeff, bool power_of_2=false, size_t THREADS_AVAILABLE=1);
+size_t r_int();
 
-void radix2_fft_sequential(std::vector<complex> &coeff);
+// Main FFT -------------------------------------------------------------------
 
-void radix2_fft_parallel(std::vector<complex> &coeff, size_t THREADS_AVAILABLE = 1);
+std::vector<complex>
+fft(MODE mode, std::vector<complex> &coeff, size_t num_threads = std::thread::hardware_concurrency());
 
-void dit_fft_inplace_seq(std::vector<complex> &P, size_t start, size_t stride, size_t N);
+// DFT ------------------------------------------------------------------------
 
-std::vector<complex> dit_fft_sequential(std::vector<complex> &P);
+std::vector<complex> dft_seq(const std::vector<complex> &coeff, size_t N = 0);
 
-std::vector<complex> dit_fft_parallel(std::vector<complex> &P_OLD, size_t num_threads);
+std::vector<complex> dft_par(const std::vector<complex> &coeff, size_t num_threads, size_t N = 0);
 
-std::vector<complex> fft(std::vector<complex> &coeff);
+// FFT ------------------------------------------------------------------------
 
-std::vector<complex> ifft(std::vector<complex> &coeff);
+void fft_radix2_seq(std::vector<complex> &coeff);
 
-// Image processing functions
+void fft_radix2_par(std::vector<complex> &coeff, size_t num_threads);
+
+void fft_dit_inplace_seq(std::vector<complex> &P, size_t start, size_t stride, size_t N);
+
+void fft_dit_inplace_par(std::vector<complex> &P, size_t start, size_t stride, size_t N, size_t num_threads);
+
+std::vector<complex> fft_dit_seq(std::vector<complex> &P);
+
+void fft_dit_par(std::vector<complex> &P, size_t start, size_t stride, size_t N, size_t num_threads);
+
+// Image processing functions -------------------------------------------------
+
+
+
+struct Point {
+    int x;
+    int y;
+};
 
 Point findStartingPoint(const uint8_t *image, int width, int height, int channels);
 

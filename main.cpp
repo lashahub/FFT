@@ -7,6 +7,7 @@
 #include "stb_image_write.h"
 
 #include "utils.hpp"
+#include "test.hpp"
 
 std::random_device rd;
 std::uniform_int_distribution<> uniform(0, std::numeric_limits<int>::max());
@@ -15,56 +16,32 @@ std::mt19937_64 engine(rd());
 using complex = std::complex<double>;
 
 
-// Function that generates random polynomial coefficients and compares the results of dft and ditfft
-bool test(std::vector<complex> X, std::vector<complex> Y) {
-    size_t counter = 0;
-    bool passed = true;
-    for (int i = 0; i < X.size(); ++i) {
-        if (std::abs(X[i] - Y[i]) > 0.001) {
-            passed = false;
-        }
-    }
-    return passed;
-}
-
-// function for testing for M times for given functions
-void test_for_M_times(std::vector<complex> (*fun1)(std::vector<complex> &, bool),
-                      std::vector<complex> (*fun2)(std::vector<complex> &, size_t), size_t M, size_t N, size_t num_threads) {
-    size_t passed = 0;
-    for (size_t i = 0; i < M; ++i) {
-        std::vector<complex> P(N);
-        for (size_t j = 0; j < N; j++) {
-            size_t r = rand();
-            size_t im = rand();
-            P[j] = complex(r % 10, im % 10);
-        }
-        std::vector<complex> Y = fun2(P, num_threads);
-//        size_t N_star = modify_size(N, num_threads);
-//        P.resize(N_star);
-//        std::vector<complex> X = fun1(P, false);
-//        X.resize(N);
-//        bool result = test(X, Y);
-//        passed += result;
-    }
-    std::cout << "Passed " << passed << "/" << M << " tests." << std::endl;
-}
-
 int main() {
-    std::vector<complex > P ;
-    for (int i = 0; i < 16384; ++i) {
-        P.emplace_back(i, 0);
-    }
 
-    std::vector<complex> Y = dft_par(P, false, NUM_THREADS);
-    std::vector<complex> X;
-    radix2_fft_sequential(P);
-
-    // check if theyre equal
-//for (int i = 0; i < P.size(); ++i) {
-//        std::cout << P[i] << " " << Y[i] << std::endl;
+//    if (test_all_correctness()) {
+//        std::cout << "Correctness test passed" << std::endl;
+//    } else {
+//        std::cout << "Correctness test failed" << std::endl;
 //    }
-std::cout << P[0] << std::endl;
-std::cout << Y[0] << std::endl;
+
+    std::vector<MODE> modes = {MODE::FFT_RADIX2_PAR};
+    std::vector<size_t> num_threads = {16};
+    std::vector<size_t> N = {1000000, 2000000, 3000000, 4000000, 5000000, 6000000, 7000000, 8000000, 10000000, 11000000,
+                             12000000, 13000000, 14000000, 15000000, 16000000, 17000000, 18000000, 19000000, 20000000};
+
+    auto results = benchmark(modes, num_threads, N);
+
+    std::cout << "Benchmark results:" << std::endl;
+    for (size_t i = 0; i < results.size(); ++i) {
+        std::cout << "Mode: " << i << std::endl;
+        for (size_t j = 0; j < num_threads.size(); ++j) {
+            std::cout << "Number of threads: " << num_threads[j] << std::endl;
+            for (size_t k = 0; k < N.size(); ++k) {
+                std::cout << N[k] << "," << results[i][j][k] << std::endl;
+            }
+            std::cout << std::endl;
+        }
+    }
 
     return 0;
 }
