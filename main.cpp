@@ -3,7 +3,7 @@
 using complex = std::complex<double>;
 
 
-// Function that generates random polynomial coefficients and compares the results of dft and ditfft
+// Function that generates random polynomial coefficients and compares the results of dft_seq and ditfft
 bool test(std::vector<complex> X, std::vector<complex> Y) {
     size_t counter = 0;
     bool passed = true;
@@ -39,8 +39,33 @@ void test_for_M_times(std::vector<complex> (*fun1)(std::vector<complex> &, bool)
 
 
 int main() {
-    test_for_M_times(dft, ditfft_parallel, 100, 100, 10);
+    //test_for_M_times(dft_seq, ditfft_parallel, 100, 100, 10);
 
+    // Generate random coefficients of polynomial P
+
+    size_t N = 16;
+    std::vector<complex> P(N);
+    for (size_t i = 0; i < N; ++i) {
+        size_t r = rand();
+        size_t im = rand();
+        P[i] = complex(r % 10, im % 10);
+    }
+    // get dft_seq of P
+    std::vector<complex> X = dft_seq(P);
+    // get fft_radix2_sequential of P
+    std::vector<complex> Y;
+    //copy the contents of P to Y
+    Y.resize(P.size());
+    std::copy(P.begin(), P.end(), Y.begin());
+    fft_radix2_seq(Y, 0, 1, Y.size());
+    // compare the results
+
+    // print difference
+    for (int i = 0; i < X.size(); ++i) {
+        std::cout << X[i] << " " << Y[i] << std::endl;
+    }
+
+    std::cout << test(X, Y);
     return 0;
 }
 

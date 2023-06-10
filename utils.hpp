@@ -41,6 +41,8 @@ size_t modify_size(size_t N, size_t p);
 
 void join_threads(std::vector<std::thread> &threads);
 
+complex cmplx(double real);
+
 // FFT functions
 
 void radix2_fft_parallel(std::vector<complex> &coeff, std::vector<complex> &eval, size_t depth = 0);
@@ -51,15 +53,21 @@ std::vector<complex> fft(std::vector<complex> &coeff);
 
 std::vector<complex> ifft(std::vector<complex> &coeff);
 
-std::vector<complex> dft(std::vector<complex> &a, bool power_of_2 = false);
+std::vector<complex> dft_seq(std::vector<complex> &a, bool power_of_2 = false);
 
 std::vector<complex> ditfft_sequential(std::vector<complex> &P);
 
-void ditfft2_inplace(std::vector<complex>& P, size_t start, size_t stride, size_t N);
+void fft_dit_inplace_seq(std::vector<complex>& P, size_t start, size_t stride, size_t N);
 
 void radix2_fft_parallel(std::vector<complex> &coeff, std::vector<complex> &eval, size_t depth);
 
 std::vector<complex> ditfft_parallel(std::vector<complex> &P, size_t num_threads);
+
+void fft_radix2_seq(std::vector<complex> &coeff, size_t start, size_t stride, size_t n);
+
+std::vector<complex> fft_dit_seq(std::vector<complex> &P);
+
+void fft_dit_par(std::vector<complex> &P, size_t start, size_t stride, size_t N, size_t num_threads);
 
 // Image processing functions
 

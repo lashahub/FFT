@@ -37,6 +37,10 @@ size_t modify_size(size_t N, size_t p) {
     return N_star;
 }
 
+complex cmplx(double ang) {
+    return complex(std::cos(ang), std::sin(ang));
+}
+
 void join_threads(std::vector<std::thread> &threads) {
     for (auto &thread : threads) {
         thread.join();
@@ -51,7 +55,6 @@ void radix2_fft_sequential(std::vector<complex>& coeff, std::vector<complex>& ev
 
     std::vector<complex> even(n / 2), odd(n / 2);
 
-    // Sequentially divide data into even and odd parts
     for (size_t i = 0; 2 * i < n; i++) {
         even[i] = coeff[2 * i];
         if (2 * i + 1 < n) {
@@ -73,7 +76,8 @@ void radix2_fft_sequential(std::vector<complex>& coeff, std::vector<complex>& ev
     }
 }
 
-void ditfft2_inplace(std::vector<complex>& P, size_t start, size_t stride, size_t N) {
+
+void fft_dit_inplace_seq(std::vector<complex>& P, size_t start, size_t stride, size_t N) {
 
     if (N <= 1) {
         return;
@@ -88,7 +92,7 @@ void ditfft2_inplace(std::vector<complex>& P, size_t start, size_t stride, size_
         for (int i = 0; i < N; i++){
             temp[i] = P[start + i * stride];
         }
-        temp = dft(temp);
+        temp = dft_seq(temp);
         for (int i = 0; i < N; i++){
             P[start + i * stride] = temp[i];
         }
@@ -96,7 +100,7 @@ void ditfft2_inplace(std::vector<complex>& P, size_t start, size_t stride, size_
     }
 
     for (int i = 0; i < p; i++) {
-        ditfft2_inplace(P, start + i * stride, stride * p, q);
+        fft_dit_inplace_seq(P, start + i * stride, stride * p, q);
     }
 
     for (int i = 0; i < p; i++) {
@@ -106,7 +110,7 @@ void ditfft2_inplace(std::vector<complex>& P, size_t start, size_t stride, size_
     }
 
     for (int i = 0; i < q; i++) {
-        ditfft2_inplace(P, start + stride * i * p, stride, p);
+        fft_dit_inplace_seq(P, start + stride * i * p, stride, p);
     }
 
     std::vector<complex> temp(p * q);
@@ -119,6 +123,7 @@ void ditfft2_inplace(std::vector<complex>& P, size_t start, size_t stride, size_
     for (int i = 0; i < p * q; i++) {
         P[start + stride * i] = temp[i];
     }
+
 }
 
 std::vector<complex> ditfft_sequential(std::vector<complex> &P) {
@@ -126,7 +131,7 @@ std::vector<complex> ditfft_sequential(std::vector<complex> &P) {
     int p = get_prime_factor(N);
 
     if (p == N) {
-        return dft(P);
+        return dft_seq(P);
     }
 
     int q = N / p;
@@ -194,15 +199,15 @@ std::vector<complex> ifft(std::vector<complex> &coeff) {
     return eval;
 }
 
-std::vector<complex> dft(std::vector<complex> &coeff, bool power_of_2) {
-    size_t N = coeff.size();
+std::vector<complex> dft_seq(std::vector<complex> &a, bool power_of_2) {
+    size_t N = a.size();
     if (power_of_2){
-        N = next_power_of_2(coeff.size());
+        N = next_power_of_2(a.size());
     }
-    std::vector<complex> eval(coeff.size());
-    for (size_t k = 0; k < coeff.size(); k++) {
-        for (size_t j = 0; j < coeff.size(); j++) {
-            eval[k] += coeff[j] * std::exp(complex(0, -2 * M_PI * (double) j * (double) k / (double) N));
+    std::vector<complex> eval(a.size());
+    for (size_t k = 0; k < a.size(); k++) {
+        for (size_t j = 0; j < a.size(); j++) {
+            eval[k] += a[j] * std::exp(complex(0, -2 * M_PI * (double) j * (double) k / (double) N));
         }
     }
     return eval;
@@ -291,10 +296,10 @@ std::vector<complex> ditfft_parallel(std::vector<complex> &P_OLD, size_t num_thr
     std::vector<std::vector<complex>> B(p, std::vector<complex>(q));
     for (size_t i = 0; i < p - 1; i++) {
         threads.push_back(std::thread([&, i]() {
-            ditfft2_inplace(A[i], 0, 1, q);
+            fft_dit_inplace_seq(A[i], 0, 1, q);
         }));
     }
-    ditfft2_inplace(A[p - 1], 0, 1, q);
+    fft_dit_inplace_seq(A[p - 1], 0, 1, q);
 
     join_threads(threads);
 
@@ -330,14 +335,14 @@ std::vector<complex> ditfft_parallel(std::vector<complex> &P_OLD, size_t num_thr
             size_t start = t * chunk_size;
             size_t end = (t+1) * chunk_size;
             for (size_t i = start; i < end; ++i) {
-                ditfft2_inplace(C[i], 0, 1, p);
+                fft_dit_inplace_seq(C[i], 0, 1, p);
             }
         }));
     }
     size_t start = (p - 1) * chunk_size;
     size_t end = q;
     for (size_t i = start; i < end; ++i) {
-        ditfft2_inplace(C[i], 0, 1, p);
+        fft_dit_inplace_seq(C[i], 0, 1, p);
     }
 
     join_threads(threads);
