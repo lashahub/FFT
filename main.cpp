@@ -17,16 +17,11 @@ std::mt19937_64 engine(rd());
 
 int main() {
 
-    std::vector<int64_t> coeff(10);
-    std::vector<int64_t> coeff2(10);
-
-    std::fill(coeff.begin(), coeff.end(), 1);
-    std::fill(coeff2.begin(), coeff2.end(), 1);
-
-    auto res = multiply(coeff, coeff2);
-
-    for (auto &i : res) {
-        std::cout << i << " ";
+    std::cout << "Testing correctness..." << std::endl;
+    if (test_all_correctness()) {
+        std::cout << "Correctness test passed!" << std::endl;
+    } else {
+        std::cout << "Correctness test failed!" << std::endl;
     }
 
     return 0;

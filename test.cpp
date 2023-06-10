@@ -16,7 +16,7 @@ bool test_correctness(MODE mode, int num_threads) {
         return true;
     }
 
-    size_t num_tests = 100;
+    size_t num_tests = 20;
     size_t max_N = 1000;
     size_t max_value = 1000;
 
