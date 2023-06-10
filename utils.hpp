@@ -10,6 +10,8 @@
 #include <fstream>
 #include <iomanip>
 
+#define NUM_THREADS 8
+
 using complex = std::complex<double>;
 
 extern std::random_device rd;
@@ -46,7 +48,9 @@ size_t r_int();
 // Main FFT -------------------------------------------------------------------
 
 std::vector<complex>
-fft(MODE mode, std::vector<complex> &coeff, size_t num_threads = 1);
+fft(MODE mode, std::vector<complex> &coeff, size_t num_threads = NUM_THREADS);
+
+void ifft(MODE mode, std::vector<complex> &coeff, size_t num_threads = NUM_THREADS);
 
 // DFT ------------------------------------------------------------------------
 
@@ -81,22 +85,17 @@ std::vector<Point> traceContour(const uint8_t *image, int width, int height, int
 
 std::vector<Point> transformContour(const std::vector<Point> &contour, int numFrequencies);
 
-/*
- * FFT implementation from https://cp-algorithms.com/algebra/fft.html
- */
+// Polynomial multiplication --------------------------------------------------
 
-const int64_t mod = (119 << 23) + 1, root = 3;  // mod is a large prime number, root is primitive root modulo mod
-const int MAXN = (1 << 20);
+const int64_t mod = (119 << 23) + 1, root = 3;
 
 int64_t power(int64_t a, int64_t b, int64_t p);
 
-void fft(std::vector<int64_t> &a, bool invert);
+void fft(std::vector<int64_t> &a, bool should_invert);
 
 std::vector<int64_t> multiply(std::vector<int64_t> const &a, std::vector<int64_t> const &b);
 
-/*
- * Audio processing
- */
+// Audio filtering ------------------------------------------------------------
 
 struct WavHeader {
     char chunkId[4];
@@ -119,8 +118,11 @@ struct WavData {
     uint16_t numChannels;
     uint32_t sampleRate;
     uint16_t bitsPerSample;
-    std::vector<uint16_t> leftChannel;
-    std::vector<uint16_t> rightChannel;
+    std::vector<uint16_t> data;
 };
 
-WavData readWavFile(const std::string &filename);
+std::pair<WavData, WavHeader> readWavFile(const std::string &filename);
+
+void filterChunk(std::vector<complex> &data, size_t cutoffFreq, bool highPass);
+
+void writeWavFile(const std::string &filename, const WavData &data, const WavHeader &header);

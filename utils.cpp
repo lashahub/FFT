@@ -186,22 +186,18 @@ std::vector<Point> transformContour(const std::vector<Point> &contour, int numFr
         contour_y[i] = complex(contour[i].y, 0);
     }
 
-    contour_x = fft(MODE::FFT_RADIX2_PAR, contour_x, 8);
-    contour_y = fft(MODE::FFT_RADIX2_PAR, contour_y, 8);
+    contour_x = fft(MODE::FFT_RADIX2_PAR, contour_x, NUM_THREADS);
+    contour_y = fft(MODE::FFT_RADIX2_PAR, contour_y, NUM_THREADS);
 
-    int cutOffIndex = numFrequencies;
-    for (size_t i = cutOffIndex; i < contour_x.size() / 2; i++) {
+    for (size_t i = numFrequencies; i < contour_x.size() / 2; i++) {
         contour_x[i] = 0;
-        contour_x[contour_x.size() - i] = 0; // for symmetry
-    }
-
-    for (size_t i = cutOffIndex; i < contour_y.size() / 2; i++) {
+        contour_x[contour_x.size() - i] = 0;
         contour_y[i] = 0;
-        contour_y[contour_y.size() - i] = 0; // for symmetry
+        contour_y[contour_y.size() - i] = 0;
     }
 
-    ifft(MODE::FFT_RADIX2_PAR, contour_x, 8);
-    ifft(MODE::FFT_RADIX2_PAR, contour_y, 8);
+    ifft(MODE::FFT_RADIX2_PAR, contour_x, NUM_THREADS);
+    ifft(MODE::FFT_RADIX2_PAR, contour_y, NUM_THREADS);
 
     std::vector<Point> contour_transformed(contour.size());
     for (size_t i = 0; i < contour.size(); i++) {
@@ -213,9 +209,7 @@ std::vector<Point> transformContour(const std::vector<Point> &contour, int numFr
 }
 
 
-/*
- * Polynomial multiplication
- */
+// Polynomial multiplication --------------------------------------------------
 
 
 int64_t power(int64_t a, int64_t b, int64_t p) {
@@ -231,49 +225,73 @@ int64_t power(int64_t a, int64_t b, int64_t p) {
 }
 
 
-void fft(std::vector<int64_t> &a, bool invert) {
-    size_t n = a.size();
-    for (size_t i = 1, j = 0; i < n; ++i) {
-        size_t bit = n >> 1;
-        for (; j & bit; bit >>= 1) j ^= bit;
-        j ^= bit;
-        if (i < j) std::swap(a[i], a[j]);
+void fft(std::vector<int64_t> &a, bool should_invert) {
+    size_t N = a.size();
+    for (size_t i = 1, j = 0; i < N; i++) {
+        size_t bit = N >> 1;
+        for (; j & bit; bit >>= 1) {
+            j = j ^ bit;
+        }
+        j = j ^ bit;
+        if (i < j) {
+            std::swap(a[i], a[j]);
+        }
     }
-    for (size_t len = 2; len <= n; len <<= 1) {
-        int64_t wlen = invert ? power(root, mod - 1 - (mod - 1) / len, mod) : power(root, (mod - 1) / len, mod);
-        for (size_t i = 0; i < n; i += len) {
+    for (size_t len = 2; len <= N; len <<= 1) {
+        int64_t curr_len;
+        if (should_invert) {
+            curr_len = power(root, mod - 1 - (mod - 1) / len, mod);
+        } else {
+            curr_len = power(root, (mod - 1) / len, mod);
+        }
+        for (size_t i = 0; i < N; i += len) {
             int64_t w = 1;
             for (int j = 0; j < len / 2; ++j) {
-                int64_t u = a[i + j], v = (a[i + j + len / 2] * w) % mod;
-                a[i + j] = u + v < mod ? u + v : u + v - mod;
-                a[i + j + len / 2] = u - v >= 0 ? u - v : u - v + mod;
-                w = (w * wlen) % mod;
+                int64_t u = a[i + j];
+                int64_t v = (a[i + j + len / 2] * w) % mod;
+                if (u + v < mod) {
+                    a[i + j] = u + v;
+                } else {
+                    a[i + j] = u + v - mod;
+                }
+                if (u - v >= 0) {
+                    a[i + j + len / 2] = u - v;
+                } else {
+                    a[i + j + len / 2] = u - v + mod;
+                }
+                w = (w * curr_len) % mod;
             }
         }
     }
-    if (invert) {
-        int64_t nrev = power(n, mod - 2, mod);
-        for (int i = 0; i < n; ++i) a[i] = (a[i] * nrev) % mod;
+    if (should_invert) {
+        int64_t r = power(N, mod - 2, mod);
+        for (int i = 0; i < N; ++i) {
+            a[i] = (a[i] * r) % mod;
+        }
     }
 }
 
 
 std::vector<int64_t> multiply(std::vector<int64_t> const &a, std::vector<int64_t> const &b) {
-    std::vector<int64_t> P(a.begin(), a.end()), Q(b.begin(), b.end());
+    std::vector<int64_t> P = a, Q = b;
     size_t totalSize = a.size() + b.size();
-    size_t n = next_power_of_2(totalSize);
-    P.resize(n);
-    Q.resize(n);
+    size_t N = next_power_of_2(totalSize);
+    P.resize(N);
+    Q.resize(N);
     fft(P, false);
     fft(Q, false);
-    for (int i = 0; i < n; i++) P[i] = (P[i] * Q[i]) % mod;
+    for (int i = 0; i < N; i++) {
+        P[i] = (P[i] * Q[i]) % mod;
+    }
     fft(P, true);
     return P;
 }
 
+
 // Audio processing -----------------------------------------------------------
 
-WavData readWavFile(const std::string &filename) {
+
+std::pair<WavData, WavHeader> readWavFile(const std::string &filename) {
     WavHeader header{};
     std::ifstream file(filename, std::ios::binary);
 
@@ -283,6 +301,19 @@ WavData readWavFile(const std::string &filename) {
     }
 
     file.read((char *) &header, sizeof(WavHeader));
+
+    // print all contents of header
+    std::cout << "ChunkID: " << header.chunkId << std::endl;
+    std::cout << "ChunkSize: " << header.chunkSize << std::endl;
+    std::cout << "Format: " << header.format << std::endl;
+    std::cout << "Subchunk1ID: " << header.subchunk1Id << std::endl;
+    std::cout << "Subchunk1Size: " << header.subchunk1Size << std::endl;
+    std::cout << "AudioFormat: " << header.audioFormat << std::endl;
+    std::cout << "NumChannels: " << header.numChannels << std::endl;
+    std::cout << "SampleRate: " << header.sampleRate << std::endl;
+    std::cout << "ByteRate: " << header.byteRate << std::endl;
+    std::cout << "BlockAlign: " << header.blockAlign << std::endl;
+    std::cout << "BitsPerSample: " << header.bitsPerSample << std::endl;
 
     if (header.audioFormat != 1) {
         std::cout << "Unsupported audio format: " << header.audioFormat << std::endl;
@@ -294,8 +325,8 @@ WavData readWavFile(const std::string &filename) {
         exit(1);
     }
 
-    std::vector<uint16_t> audioData(header.subchunk2Size / 2);
-    file.read(reinterpret_cast<char *>(audioData.data()), header.subchunk2Size);
+    std::vector<uint16_t> audioData(header.chunkSize / 2);
+    file.read(reinterpret_cast<char *>(audioData.data()), header.chunkSize / 2);
 
     WavData wavData;
     wavData.audioFormat = header.audioFormat;
@@ -304,16 +335,51 @@ WavData readWavFile(const std::string &filename) {
     wavData.bitsPerSample = header.bitsPerSample;
 
     if (header.numChannels == 1) {
-        wavData.leftChannel = std::move(audioData);
+        wavData.data = std::move(audioData);
     } else if (header.numChannels == 2) {
         for (size_t i = 0; i < audioData.size(); i += 2) {
-            wavData.leftChannel.push_back(audioData[i]);
-            wavData.rightChannel.push_back(audioData[i + 1]);
+            wavData.data.push_back((audioData[i] + audioData[i + 1]) / 2);
         }
     } else {
         std::cout << "Unsupported number of channels: " << header.numChannels << std::endl;
         exit(1);
     }
 
-    return wavData;
+    return {wavData, header};
+}
+
+void filterChunk(std::vector<complex> &data, size_t cutoffFreq, bool highPass) {
+    if (highPass) {
+        for (size_t i = 0; i < cutoffFreq; i++) {
+            data[i] = 0;
+            data[data.size() - i] = 0;
+        }
+    } else {
+        for (size_t i = cutoffFreq; i < data.size() / 2; i++) {
+            data[i] = 0;
+            data[data.size() - i] = 0;
+        }
+    }
+}
+
+void writeWavFile(const std::string &filename, const WavData &data, const WavHeader &header) {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file) {
+        std::cout << "Error opening file: " << filename << std::endl;
+        return;
+    }
+
+    file.write(reinterpret_cast<const char *>(&header), sizeof(WavHeader));
+
+    if (data.numChannels == 1) {
+        file.write(reinterpret_cast<const char *>(data.data.data()), data.data.size() * sizeof(uint16_t));
+    } else if (data.numChannels == 2) {
+        std::vector<uint16_t> interleavedData;
+        interleavedData.reserve(data.data.size() + data.data.size());
+        for (size_t i = 0; i < data.data.size(); i++) {
+            interleavedData.push_back(data.data[i]);
+            interleavedData.push_back(data.data[i]);
+        }
+        file.write(reinterpret_cast<const char *>(interleavedData.data()), interleavedData.size() * sizeof(uint16_t));
+    }
 }
